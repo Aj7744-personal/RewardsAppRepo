@@ -1,24 +1,35 @@
 package com.example.reward;
 
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.example.reward.controller.RewardController;
-import com.example.reward.model.CustomerDetail;
+import com.example.reward.model.Transaction;
 import com.example.reward.service.RewardService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.reward.service.RewardServiceImpl;
 
 /**
  * Test class for {@link RewardController}.
@@ -31,29 +42,46 @@ public class RewardsControllerTest {
 	private MockMvc mockMvc;
 
 	@MockBean
-	private RewardService rewrdService;
+    private RewardServiceImpl rewardService;
 
-	/**
-	 * Tests the {@link RewardController#calculateRewards(List)} method.
-	 *
-	 * This test verifies that the calculateRewards endpoint returns an HTTP 200
-	 * (OK) status when provided with valid customer details.
-	 *
-	 * @throws Exception if an error occurs during the test execution.
-	 */
+	@InjectMocks
+    private RewardController rewardController;
 
-	@Test
-	public void testCalculateRewards() throws Exception {
-		CustomerDetail custDtl = new CustomerDetail();
-		custDtl.setCustomerId("C1");
-		custDtl.setAmount(120);
-		custDtl.setDate(LocalDate.of(2025, 4, 1));
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+        mockMvc = MockMvcBuilders.standaloneSetup(rewardController).build();
+    }
 
-		when(rewrdService.calculateRewards(Collections.singletonList(custDtl))).thenReturn(Collections.emptyMap());
+    @Test
+    public void testSaveCustomerTransaction() throws Exception {
+        List<Transaction> transactions = List.of(new Transaction());
+        doNothing().when(rewardService).saveCustomerTransaction(transactions);
 
-		mockMvc.perform(post("/rewards/calculate").contentType(MediaType.APPLICATION_JSON)
-				.content("[{\"customerId\":\"C1\",\"amount\":120,\"date\":\"2025-04-02\"}]"))
-				.andExpect(status().isOk());
-	}
+        mockMvc.perform(post("/rewards/transaction")
+                .contentType("application/json")
+                .content("[{\"id\":1,\"amount\":100}]"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    public void testGetCustomerRewardByID() throws Exception {
+        Map<String, Map<Month, Integer>> rewards = new HashMap<>();
+        when(rewardService.getCustomerRewrdByID("123")).thenReturn(rewards);
+
+        mockMvc.perform(get("/rewards/123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size()").value(rewards.size()));
+    }
+
+    @Test
+    public void testGetAllCustomerRewards() throws Exception {
+        Map<String, Map<Month, Integer>> rewards = new HashMap<>();
+        when(rewardService.getAllCustomerRewrds()).thenReturn(rewards);
+
+        mockMvc.perform(get("/rewards/"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size()").value(rewards.size()));
+    }
 
 }

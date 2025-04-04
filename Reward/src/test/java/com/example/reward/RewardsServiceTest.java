@@ -1,6 +1,11 @@
 package com.example.reward;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.time.Month;
@@ -8,21 +13,26 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import com.example.reward.exception.RewardCalculationException;
-import com.example.reward.model.CustomerDetail;
-import com.example.reward.service.RewardService;
+import com.example.reward.model.Transaction;
+import com.example.reward.repository.RewardRepository;
+import com.example.reward.service.RewardServiceImpl;
 
 /**
- * Test class for {@link RewardService}.
+ * Test class for {@link RewardServiceImpl}.
  */
 public class RewardsServiceTest {
 
-	private final RewardService rewardsService = new RewardService();
+	private final RewardServiceImpl rewardsServiceImpl = new RewardServiceImpl();
 
 	/**
-	 * Tests the {@link RewardService#calculateRewards(List)} method.
+	 * Tests the {@link Serviceclass#calculateRewards(List)} method.
 	 *
 	 * This test verifies that the calculateRewards method correctly calculates
 	 * reward points for a list of customer details.
@@ -31,26 +41,65 @@ public class RewardsServiceTest {
 	 *                                    calculation.
 	 */
 
-	@Test
-	public void testCalculateRewards() throws RewardCalculationException {
-		CustomerDetail custDtl = new CustomerDetail();
-		custDtl.setCustomerId("C1");
-		custDtl.setAmount(120);
-		custDtl.setDate(LocalDate.of(2025, 4, 1));
+	@Mock
+    private RewardRepository rewardRepo;
 
-		CustomerDetail custDtl2 = new CustomerDetail();
-		custDtl2.setCustomerId("C2");
-		custDtl2.setAmount(80);
-		custDtl2.setDate(LocalDate.of(2025, 4, 2));
+    @InjectMocks
+    private RewardServiceImpl rewardService;
 
-		List<CustomerDetail> custDetls = Arrays.asList(custDtl, custDtl2);
-		Map<String, Map<Month, Integer>> rewards = rewardsService.calculateRewards(custDetls);
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
 
-		Month month1 = custDtl.getDate().getMonth();
-		Month month2 = custDtl2.getDate().getMonth();
+    @Test
+    void CustomerRewardByID() throws RewardCalculationException {
+    	Transaction transaction1 = new Transaction(1, "C1", LocalDate.of(2025, Month.JANUARY, 1), 120.0);
+    	Transaction transaction2 = new Transaction(2, "C1", LocalDate.of(2025, Month.FEBRUARY, 1), 80.0);
+        List<Transaction> transactions = Arrays.asList(transaction1, transaction2);
 
-		assertEquals(90, rewards.get("C1").get(month1));
-		assertEquals(30, rewards.get("C2").get(month2));
-	}
+        when(rewardRepo.findByCustomerId("C1")).thenReturn(transactions);
+
+        Map<String, Map<Month, Integer>> rewards = rewardService.getCustomerRewrdByID("C1");
+
+        assertNotNull(rewards);
+        assertEquals(2, rewards.get("C1").size());
+        assertEquals(90, rewards.get("C1").get(Month.JANUARY));
+        assertEquals(30, rewards.get("C1").get(Month.FEBRUARY));
+    }
+    
+    @Test
+    void testGetCustomerRewardByID_Negative() {
+        when(rewardRepo.findByCustomerId("C1")).thenReturn(null);
+
+        RewardCalculationException exception = assertThrows(RewardCalculationException.class, () -> {
+            rewardService.getCustomerRewrdByID("C1");
+        });
+
+        assertEquals("Customer details list cannot be null or empty.", exception.getMessage());
+    }
+
+    @Test
+    void testCalculatePoints() throws RewardCalculationException {
+        assertEquals(90, rewardService.calculatePoints(120.0));
+        assertEquals(30, rewardService.calculatePoints(80.0));
+        assertEquals(0, rewardService.calculatePoints(40.0));
+    }
+    
+    @Test
+    void testCalculatePoints_Negative() {
+        RewardCalculationException exception = assertThrows(RewardCalculationException.class, () -> {
+            rewardService.calculatePoints(-10.0);
+        });
+
+        assertEquals("Transaction amount cannot be negative.", exception.getMessage());
+    }
+
+    @Test
+    void testSaveCustomerTransaction() {
+        Transaction transaction = new Transaction(1, "C1", LocalDate.of(2025, Month.JANUARY, 1), 120.0);
+        rewardService.saveCustomerTransaction(Arrays.asList(transaction));
+        verify(rewardRepo, times(1)).save(transaction);
+    }
 
 }
